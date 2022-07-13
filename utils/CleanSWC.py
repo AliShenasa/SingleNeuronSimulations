@@ -43,40 +43,78 @@ def writeSWCLine(dataDict, outfile):
                                 parentidx = dataDict['parentidx'])
     outfile.write(lineout)
 
+def processSWCLine(line, rootSeen, outfile, swcformat):
+    """Given a line from a SWC file and a format, cleans the line and writes it to the output file"""
+    if swcformat is None:
+        stripline = line.strip()
+        if (stripline == "") or (stripline[0] == "#"): # ignore blank and comment lines
+            outfile.write(line)
+            return
 
-def cleanSWC(swcfile, outfilename):
+        lineData = parseSWCLine(line)
+        if (lineData['parentidx'] == -1) and (not rootSeen['value']):
+            # Root
+            rootSeen['value'] = True
+            writeSWCLine(lineData, outfile)
+            return
+        
+        if (lineData['parentidx'] == -1) and (rootSeen['value']):
+            # Missing parent
+            lineData['parentidx'] = lineData['idx'] - 1
+            writeSWCLine(lineData, outfile)
+
+        else:
+            # Other
+            writeSWCLine(lineData, outfile)
+
+    if swcformat == 'neurom':
+        # Replace segtype (section type) of 0 with 5
+        stripline = line.strip()
+        if (stripline == "") or (stripline[0] == "#"): # ignore blank and comment lines
+            outfile.write(line)
+            return
+
+        lineData = parseSWCLine(line)
+        
+        if lineData['segtype'] == 0:
+            lineData['segtype'] = 5
+
+        if (lineData['parentidx'] == -1) and (not rootSeen['value']):
+            # Root
+            rootSeen['value'] = True
+            writeSWCLine(lineData, outfile)
+            return
+        
+        if (lineData['parentidx'] == -1) and (rootSeen['value']):
+            # Missing parent
+            lineData['parentidx'] = lineData['idx'] - 1
+            writeSWCLine(lineData, outfile)
+
+        else:
+            # Other
+            writeSWCLine(lineData, outfile)
+
+
+def cleanSWC(swcfile, outfilename, swcformat):
     """Cleans input swc file and saves it to output file"""
-    rootSeen = False
+    rootSeen = {'value': False}
     with open(swcfile) as swcfile, open(outfilename, 'w') as outfile:
         for line in swcfile:
-            stripline = line.strip()
-            if (stripline == "") or (stripline[0] == "#"): # ignore blank and comment lines
-                outfile.write(line)
-                continue
-
-            lineData = parseSWCLine(line)
-            if (lineData['parentidx'] == -1) and (not rootSeen):
-                rootSeen = True
-                writeSWCLine(lineData, outfile)
-                continue
-            
-            if (lineData['parentidx'] == -1) and (rootSeen):
-                lineData['parentidx'] = lineData['idx'] - 1
-                writeSWCLine(lineData, outfile)
-
-            else:
-                writeSWCLine(lineData, outfile)
+            processSWCLine(line, rootSeen, outfile, swcformat)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', '-i', type=str, action='store', help='input file')
     parser.add_argument('--output', '-o', type=str, action='store', help='output file')
+    parser.add_argument('--swcformat', '-f', type=str, action='store', 
+                        help='(optional) format of swc: neurom (section type 0 converted to ')
     args = parser.parse_args()
     infilename = args.input
     outfilename = args.output
+    swcformat = args.swcformat
 
-    cleanSWC(infilename, outfilename)
+    cleanSWC(infilename, outfilename, swcformat)
 
 
 if __name__ == "__main__":
